@@ -1,0 +1,101 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f4;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+h1 {
+    text-align: center;
+}
+
+label {
+    display: block;
+    margin-bottom: 10px;
+}
+
+input,
+button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.draft-board {
+    display: flex;
+    flex-direction: column; /* Stack rounds vertically */
+    margin-top: 20px;
+}
+
+.round-row {
+    display: flex; /* Align picks horizontally */
+    margin-bottom: 20px; /* Space between rounds */
+}
+
+.player-card {
+    background-color: #f0f0f0; /* Default background */
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 10px;
+    width: 150px;
+    text-align: center;
+    position: relative;
+    transition: transform 0.2s;
+    flex: 0 0 auto; /* Prevent flex items from shrinking */
+}
+
+.player-stats {
+    display: none; /* Hide stats by default */
+    position: absolute;
+    top: -100px; /* Position above the card */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    z-index: 10;
+    width: 200px; /* Width of the stats box */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.player-card:hover .player-stats {
+    display: block; /* Show stats on hover */
+}
+
+/* Unique colors for position groups */
+.player-card.rb { background-color: #FFCCCB; } /* RB */
+.player-card.wr { background-color: #ADD8E6; } /* WR */
+.player-card.qb { background-color: #90EE90; } /* QB */
+.player-card.te { background-color: #FFD700; } /* TE */
+/* Add more position groups as needed */
+
+.player-card img {
+    width: 100%; /* Ensures the image takes the full width of the card */
+    height: auto; /* Maintains aspect ratio */
+    border-radius: 5px; /* Rounded corners */
+    margin-bottom: 10px; /* Space below the image */
+}
+
+.player-card:hover {
+    transform: scale(1.05);
+    cursor: pointer;
+}
+
+.player-name {
+    font-weight: bold;
+}
+
+.player-position {
+    color: #555;
+}
