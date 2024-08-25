@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draft Board</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Draft Board</h1>
+    <div>
+        <input type="text" id="league-id" placeholder="Enter League ID">
+        <button onclick="fetchDraftResults()">Fetch Draft Results</button>
+    </div>
+    <div id="draft-board" class="draft-board"></div>
+
+    <script>
+        async function fetchDraftResults() {
+            const leagueId = document.getElementById('league-id').value;
+            if (!leagueId) {
+                alert('Please enter a League ID');
+                return;
+            }
+
+            const response = await fetch(`/api/draft_players?draft_id=${leagueId}`);
+            const data = await response.json();
+            if (data.error) {
+                document.getElementById('draft-board').innerText = data.error;
+                return;
+            }
+            renderDraftBoard(data.draft_results);
+        }
+
+        function renderDraftBoard(draftResults) {
+            const draftBoard = document.getElementById('draft-board');
+            draftBoard.innerHTML = ''; // Clear previous results
+            draftResults.forEach(result => {
+                const playerCard = document.createElement('div');
+                playerCard.className = 'player-card';
+                playerCard.innerHTML = `
+                    <img src="${result.image_url}" alt="${result.player_name}">
+                    <p><strong>${result.player_name}</strong></p>
+                    <p>Position: ${result.position}</p>
+                    <p>Pick: ${result.pick}</p>
+                    <p>Round: ${result.round}</p>
+                    <p>Team: ${result.team_key}</p>
+                    <p>Stats: ${JSON.stringify(result.stats)}</p>
+                `;
+                draftBoard.appendChild(playerCard);
+            });
+        }
+    </script>
+</body>
+</html>

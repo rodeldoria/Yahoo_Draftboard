@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <title>Yahoo Fantasy Sports Draft Board</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Yahoo Fantasy Sports Draft Board</h1>
+        <label for="leagueId">Enter League ID:</label>
+        <input type="text" id="leagueId" placeholder="e.g., nfl.l.818153">
+        <button id="fetchDraftResults">Fetch Draft Results</button>
+        <button id="fetchStandings">Fetch Standings</button>
+        <button id="fetchTeams">Fetch Teams</button>
+        <button id="fetchPlayerDetails">Fetch Player Details</button>
+        <div id="draftBoard" class="draft-board"></div>
+        <div id="standings" class="standings"></div>
+        <div id="teams" class="teams"></div>
+        <div id="playerDetails" class="player-details"></div>
+    </div>
+
+    <script>
+        function fetchDraftResults() {
+            const leagueId = document.getElementById('leagueId').value;
+            if (!leagueId) {
+                alert("Please enter a League ID."); // Alert if no League ID is provided
+                return; // Do nothing if no League ID is provided
+            }
+            fetch('/get_draft_results', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ league_id: leagueId })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok ' + response.statusText);
+                }
+                return response.json();
+            })
+            .then(data => {
+                const draftBoard = document.getElementById('draftBoard');
+                draftBoard.innerHTML = ''; // Clear previous results
+
+                // Create draft board
+                data.draft_results.forEach(result => {
+                    const playerCard = document.createElement('div');
+                    playerCard.innerHTML = `
+                        <div>Pick: ${result.pick}, Round: ${result.round}, Team Key: ${result.team_key}</div>
+                        <div>Player ID: ${result.player_id}, Player Name: ${result.player_name}, Position: ${result.position}</div>
+                        <div>Stats: ${JSON.stringify(result.stats)}</div>
+                    `;
+                    draftBoard.appendChild(playerCard);
+                });
+            })
+            .catch(error => {
+                console.error('Error fetching draft results:', error);
+                alert('Error fetching draft results: ' + error.message); // Alert user on error
+            });
+        }
+
+        function fetchPlayerDetails() {
+            fetch('/api/player-details')
+                .then(response => response.json())
+                .then(data => {
+                    const playerDetailsDiv = document.getElementById('playerDetails');
+                    playerDetailsDiv.innerHTML = ''; // Clear previous results
+
+                    const player = data.details[0]; // Assuming you want the first player
+                    const playerInfo = `
+                        <div>
+                            <h2>${player.name.full} (${player.display_position})</h2>
+                            <img src="${player.image_url}" alt="${player.name.full}">
+                            <p>Team: ${player.editorial_team_full_name}</p>
+                            <p>Bye Week: ${player.bye_weeks.week}</p>
+                            <p>Uniform Number: ${player.uniform_number}</p>
+                            <p>Is Undroppable: ${player.is_undroppable}</p>
+                            <p>Position Type: ${player.position_type}</p>
+                            <p>Primary Position: ${player.primary_position}</p>
+                            <h3>Stats:</h3>
+                            <ul>
+                                ${player.player_stats.stats.map(stat => `<li>Stat ID: ${stat.stat.stat_id}, Value: ${stat.stat.value}</li>`).join('')}
+                            </ul>
+                            <h3>Points:</h3>
+                            <p>Total Points: ${player.player_points.total}</p>
+                            <h3>Ownership:</h3>
+                            <p>Owner Team Name: ${data.ownership[player.player_id].owner_team_name}</p>
+                        </div>
+                    `;
+                    playerDetailsDiv.innerHTML = playerInfo;
+                })
+                .catch(error => {
+                    console.error('Error fetching player details:', error);
+                });
+        }
+
+        document.getElementById('fetchDraftResults').addEventListener('click', fetchDraftResults);
+        document.getElementById('fetchPlayerDetails').addEventListener('click', fetchPlayerDetails);
+    </script>
+</body>
+</html>
