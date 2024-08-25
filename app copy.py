@@ -1,8 +1,9 @@
 from flask import Flask, jsonify, request, render_template
 from yahoo_oauth import OAuth2
 from yahoo_fantasy_api import Game, League
-import json
 import logging
+import aiohttp
+from asgiref.sync import async_to_sync
 
 app = Flask(__name__)
 
@@ -14,38 +15,44 @@ if not oauth.token_is_valid():
     oauth.refresh_access_token()
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
-@app.route('/api/league', methods=['GET'])
-def get_league_details():
-    """Get league details."""
-    try:
-        league_id = request.args.get('league_id')
-        nfl_game = Game(oauth, 'nfl')
-        league = nfl_game.to_league(league_id)
-        league_details = league.settings()
-        return jsonify(league_details)
-    except Exception as e:
-        logging.error(f"Error fetching league details: {e}")
-        return jsonify({"error": str(e)}), 500
-
 @app.route('/api/drafts/<league_key>', methods=['GET'])
 def get_draft_results_by_key(league_key):
-    """Get draft results by league key."""
+    """Get draft results by league key and include player details."""
     try:
         nfl_game = Game(oauth, 'nfl')
         league = nfl_game.to_league(league_key)
         draft_results = league.draft_results()
         if not draft_results:
             return jsonify({"message": "No draft results available."}), 404
+
+        # Extract player IDs from draft results
+        player_ids = [result['player_id'] for result in draft_results]
+
+        # Fetch player details for each player ID
+        player_details = league.player_details(player_ids)
+
+        # Create a dictionary for quick lookup of player details by player_id
+        player_details_dict = {player['player_id']: player for player in player_details}
+
+        # Combine draft results with player details
+        for result in draft_results:
+            player_id = result['player_id']
+            if player_id in player_details_dict:
+                player_info = player_details_dict[player_id]
+                result['player_name'] = player_info['name']['full']
+                result['image_url'] = player_info.get('image_url', '')
+                result['display_position'] = player_info.get('display_position', '')
+
         return jsonify(draft_results)
     except Exception as e:
-        logging.error(f"Error fetching draft results: {e}")
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Exception: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/standings', methods=['GET'])
 def get_standings():
@@ -57,8 +64,8 @@ def get_standings():
         standings = league.standings()
         return jsonify(standings)
     except Exception as e:
-        logging.error(f"Error fetching standings: {e}")
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Exception: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/teams', methods=['GET'])
 def get_all_teams():
@@ -70,62 +77,100 @@ def get_all_teams():
         teams = league.teams()
         return jsonify(teams)
     except Exception as e:
-        logging.error(f"Error fetching teams: {e}")
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Exception: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/teams/<league_id>', methods=['GET'])
-def get_teams_by_league(league_id):
-    """Get team details by league ID."""
-    try:
-        nfl_game = Game(oauth, 'nfl')
-        league = nfl_game.to_league(league_id)
-        teams = league.teams()
-        return jsonify(teams)
-    except Exception as e:
-        logging.error(f"Error fetching teams: {e}")
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/api/players/<player_id>', methods=['GET'])
-def get_player_details(player_id):
+@app.route('/api/player-details', methods=['GET'])
+def get_player_details():
     """Get player details."""
     try:
         league_id = request.args.get('league_id')
+        player_identifier = request.args.get('player')  # Either player ID or search term
+
         nfl_game = Game(oauth, 'nfl')
         league = nfl_game.to_league(league_id)
-        player_details = league.player_details(player_id)
-        return jsonify(player_details)
-    except Exception as e:
-        logging.error(f"Error fetching player details: {e}")
-        return jsonify({"error": str(e)}), 500
 
-@app.route('/api/player-details', methods=['GET'])
-def get_player_details_from_json():
-    """Get player details from JSON file."""
-    try:
-        with open('harambot/tests/test-player-details.json') as f:
-            player_data = json.load(f)
-        return jsonify(player_data)
+        if player_identifier.isdigit():
+            # If the player identifier is a digit, assume it's a player ID
+            player_details = league.player_details(int(player_identifier))
+        else:
+            # Otherwise, search by name
+            player_details = league.player_details(player_identifier)
+
+        # Format response to match your desired structure
+        formatted_details = []
+        for player in player_details:
+            formatted_details.append({
+                "player_key": player["player_key"],
+                "player_id": player["player_id"],
+                "name": player["name"],
+                "editorial_player_key": player["editorial_player_key"],
+                "editorial_team_key": player["editorial_team_key"],
+                "editorial_team_full_name": player["editorial_team_full_name"],
+                "editorial_team_abbr": player["editorial_team_abbr"],
+                "bye_weeks": player.get("bye_weeks", {}),
+                "uniform_number": player.get("uniform_number", ""),
+                "display_position": player.get("display_position", ""),
+                "headshot": player.get("headshot", {}),
+                "image_url": player.get("image_url", ""),
+                "is_undroppable": player.get("is_undroppable", ""),
+                "position_type": player.get("position_type", ""),
+                "primary_position": player.get("primary_position", ""),
+                "eligible_positions": player.get("eligible_positions", []),
+                "player_stats": player.get("player_stats", {}),
+                "player_points": player.get("player_points", {})
+            })
+
+        ownership = league.ownership([player['player_id'] for player in player_details])
+        response = {
+            "details": formatted_details,
+            "ownership": ownership
+        }
+
+        return jsonify(response)
     except Exception as e:
-        logging.error(f"Error fetching player details from JSON: {e}")
-        return jsonify({"error": str(e)}), 500
+        logging.error(f"Exception: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/free-agents', methods=['GET'])
+def get_free_agents():
+    """Get free agents for a given position."""
+    try:
+        league_id = request.args.get('league_id')
+        position = request.args.get('position')
+
+        nfl_game = Game(oauth, 'nfl')
+        league = nfl_game.to_league(league_id)
+        free_agents = league.free_agents(position)
+
+        return jsonify(free_agents)
+    except Exception as e:
+        logging.error(f"Exception: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+async def fetch_player_stats(session, player_ids):
+    """Fetch player stats asynchronously."""
+    stats = []
+    for player_id in player_ids:
+        url = f"https://fantasysports.yahooapis.com/fantasy/v2/league/nfl.l.818153/players;player_keys=nfl.p.{player_id}/stats?format=json"
+        async with session.get(url, headers={'Authorization': f'Bearer {oauth.token["access_token"]}'}) as response:
+            data = await response.json()
+            stats.append(data)
+    return stats
 
 @app.route('/get_draft_results', methods=['POST'])
-def fetch_draft_results():
-    league_id = request.json.get('league_id')
-    nfl_game = Game(oauth, 'nfl')
-
+async def fetch_draft_results():
+    """Fetch draft results and player stats asynchronously."""
     try:
-        league = nfl_game.to_league(league_id)
-        draft_results = league.draft_results()
+        draft_results = request.json.get('draft_results', [])
+        player_ids = [result['player_id'] for result in draft_results]
 
-        # Print draft results to the console
-        logging.debug(f"Draft Results: {draft_results}")
+        async with aiohttp.ClientSession() as session:
+            player_stats = await fetch_player_stats(session, player_ids)
 
-        # Prepare draft results information
         draft_info_list = []
-        for result in draft_results:
+        for result, stats in zip(draft_results, player_stats):
             player_info = league.player_details(result['player_id'])[0]
-            player_stats = league.player_stats([result['player_id']], 'season', season=2022)  # Fetch stats for the last season
             draft_info = {
                 'pick': result['pick'],
                 'round': result['round'],
@@ -133,11 +178,14 @@ def fetch_draft_results():
                 'player_id': result['player_id'],
                 'player_name': player_info['name']['full'],
                 'position': player_info['primary_position'],
-                'stats': player_stats
+                'stats': stats
             }
             draft_info_list.append(draft_info)
 
         return jsonify({'draft_results': draft_info_list})
+    except aiohttp.ClientError as e:
+        logging.error(f"Network error: {str(e)}")
+        return jsonify({'error': 'Network error. Please try again later.'}), 500
     except RuntimeError as e:
         error_message = str(e)
         logging.error(f"Runtime error: {error_message}")
