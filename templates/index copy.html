@@ -130,17 +130,11 @@
     <div class="form-inline">
         <input type="text" id="leagueId" class="compact-input" placeholder="Enter League ID (e.g., nfl.l.818153)">
         <button id="fetchDraftResults" class="compact-button">Fetch Draft Results</button>
-        <button id="fetchStandings" class="compact-button">Fetch Standings</button>
-        <button id="fetchTeams" class="compact-button">Fetch Teams</button>
-        <button id="fetchPlayerDetails" class="compact-button">Fetch Player Details</button>
-        <button id="fetchFreeAgents" class="compact-button">Fetch Free Agents</button>
+
     </div>
 
     <div id="draftBoard" class="round-container"></div>
-    <div id="standings" class="teams-container"></div>
-    <div id="teams" class="teams-container"></div>
-    <div id="playerDetails" class="player-details-container"></div>
-    <div id="freeAgents" class="player-details-container"></div>
+
 
     <script>
         function fetchDraftResults() {
@@ -178,17 +172,24 @@
                         playerCards.className = 'player-cards';
 
                         rounds[round].forEach(player => {
-                            const playerCard = document.createElement('div');
-                            playerCard.className = 'player-card';
-                            playerCard.innerHTML = `
-                                <img src="${player.image_url}" alt="${player.player_name}">
-                                <div class="player-info">
-                                    <div class="player-name">${player.player_name} (${player.position})</div>
-                                    <div>Pick: ${player.pick}</div>
-                                    <div>Team: ${player.team_key}</div>
-                                </div>
-                            `;
-                            playerCards.appendChild(playerCard);
+                            fetch(`/api/player-details?league_id=${leagueId}&player=${player.player_id}`)
+                                .then(response => response.json())
+                                .then(playerData => {
+                                    const playerInfo = playerData.details[0];
+                                    const playerCard = document.createElement('div');
+                                    playerCard.className = 'player-card';
+                                    playerCard.innerHTML = `
+                                        <img src="${playerInfo.image_url}" alt="${playerInfo.name.full}">
+                                        <div class="player-info">
+                                            <div class="player-name">${playerInfo.name.full} (${playerInfo.display_position})</div>
+                                            <div>Team: ${playerInfo.editorial_team_full_name}</div>
+                                            <div>Pick: ${player.pick}.${player.round}</div>
+                                            <div>Position: ${playerInfo.display_position}</div>
+                                        </div>
+                                    `;
+                                    playerCards.appendChild(playerCard);
+                                })
+                                .catch(error => console.error('Error fetching player details:', error));
                         });
 
                         roundContainer.appendChild(playerCards);

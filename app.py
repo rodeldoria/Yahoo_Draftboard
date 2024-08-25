@@ -1,7 +1,7 @@
+import logging
 from flask import Flask, jsonify, request, render_template
 from yahoo_oauth import OAuth2
 from yahoo_fantasy_api import Game, League
-import logging
 import aiohttp
 from asgiref.sync import async_to_sync
 
@@ -25,6 +25,12 @@ def index():
 def get_draft_results_by_key(league_key):
     """Get draft results by league key and include player details."""
     try:
+        if not oauth.token_is_valid():
+            logging.info("Token is not valid, refreshing...")
+            oauth.refresh_access_token()
+        else:
+            logging.info("Token is still valid")
+
         nfl_game = Game(oauth, 'nfl')
         league = nfl_game.to_league(league_key)
         draft_results = league.draft_results()
@@ -48,6 +54,8 @@ def get_draft_results_by_key(league_key):
                 result['player_name'] = player_info['name']['full']
                 result['image_url'] = player_info.get('image_url', '')
                 result['display_position'] = player_info.get('display_position', '')
+                result['editorial_team_full_name'] = player_info.get('editorial_team_full_name', '')
+                result['bye_weeks'] = player_info.get('bye_weeks', {})
 
         return jsonify(draft_results)
     except Exception as e:
@@ -86,6 +94,9 @@ def get_player_details():
     try:
         league_id = request.args.get('league_id')
         player_identifier = request.args.get('player')  # Either player ID or search term
+
+        if not player_identifier:
+            raise ValueError("Player identifier is required")
 
         nfl_game = Game(oauth, 'nfl')
         league = nfl_game.to_league(league_id)
