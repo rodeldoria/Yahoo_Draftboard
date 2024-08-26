@@ -69,7 +69,8 @@
         .player-cards {
             display: flex;
             gap: 5px;
-            flex-wrap: wrap;
+            flex-wrap: nowrap; /* Ensure all cards are on one row */
+            overflow-x: auto; /* Allow horizontal scrolling if needed */
         }
 
         .player-card {
@@ -82,7 +83,7 @@
             text-align: center;
             font-size: 10px;
             height: 100px;
-            width: 120px;
+            width: 80px; /* Adjust width to fit more cards in one row */
             position: relative;
             background-color: #f0f0f0; /* Default background color */
         }
