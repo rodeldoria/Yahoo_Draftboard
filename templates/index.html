@@ -68,37 +68,46 @@
 
         .player-cards {
             display: flex;
-            gap: 10px;
+            gap: 5px;
             flex-wrap: wrap;
         }
 
         .player-card {
             border: 1px solid #ccc;
-            border-radius: 5px;
-            padding: 10px;
-            background-color: #fff;
+            border-radius: 10px;
+            padding: 5px;
             display: flex;
             flex-direction: column;
             align-items: center;
             text-align: center;
             font-size: 10px;
-            height: 150px;
+            height: 100px;
             width: 120px;
             position: relative;
+            background-color: #f0f0f0; /* Default background color */
         }
 
         .player-card img {
             max-width: 100%;
+            height: auto;
             border-radius: 5px;
-            height: 50px;
         }
 
         .player-info {
             margin-top: 5px;
-            font-size: 12px;
+            font-size: 10px;
         }
 
         .player-name {
+            font-weight: bold;
+            margin-top: auto; /* Pushes the name to the bottom */
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            font-size: 10px;
             font-weight: bold;
         }
 
@@ -110,6 +119,31 @@
         .light-theme {
             background-color: #fff;
             color: #000;
+        }
+
+        /* Position-specific colors */
+        .QB {
+            background-color: #FFE4B5; /* Moccasin */
+        }
+
+        .RB {
+            background-color: #98FB98; /* PaleGreen */
+        }
+
+        .WR {
+            background-color: #B0E0E6; /* PowderBlue */
+        }
+
+        .TE {
+            background-color: #FFB6C1; /* LightPink */
+        }
+
+        .K {
+            background-color: #FFDAB9; /* PeachPuff */
+        }
+
+        .DEF {
+            background-color: #DDA0DD; /* Plum */
         }
     </style>
 </head>
@@ -130,38 +164,58 @@
     <div class="form-inline">
         <input type="text" id="leagueId" class="compact-input" placeholder="Enter League ID (e.g., nfl.l.818153)">
         <button id="fetchDraftResults" class="compact-button">Fetch Draft Results</button>
-
     </div>
 
     <div id="draftBoard" class="round-container"></div>
 
-
     <script>
-        function fetchDraftResults() {
+        let lastFetchedPick = 0;
+        const displayedPlayers = new Set();
+
+        async function fetchPlayerDetails(leagueId, player, retries = 3) {
+            try {
+                const response = await fetch(`/api/player-details?league_id=${leagueId}&player=${player.player_id}`);
+                const playerData = await response.json();
+                return playerData.details[0];
+            } catch (error) {
+                console.error('Error fetching player details:', error);
+                if (retries > 0) {
+                    console.log(`Retrying... (${retries} attempts left)`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * (4 - retries))); // Exponential backoff
+                    return fetchPlayerDetails(leagueId, player, retries - 1);
+                } else {
+                    return null;
+                }
+            }
+        }
+
+        async function fetchDraftResults() {
             const leagueId = document.getElementById('leagueId').value;
             if (!leagueId) {
                 alert("Please enter a League ID."); // Alert if no League ID is provided
                 return;
             }
-            fetch('/api/drafts/' + leagueId)
-                .then(response => response.json())
-                .then(data => {
-                    const draftBoard = document.getElementById('draftBoard');
-                    draftBoard.innerHTML = ''; // Clear previous results
+            try {
+                const response = await fetch('/api/drafts/' + leagueId);
+                const data = await response.json();
+                const draftBoard = document.getElementById('draftBoard');
 
-                    const rounds = {};
+                const rounds = {};
 
-                    data.forEach(result => {
-                        const round = result.round;
-                        if (!rounds[round]) {
-                            rounds[round] = [];
-                        }
-                        rounds[round].push(result);
-                    });
+                data.forEach(result => {
+                    const round = result.round;
+                    if (!rounds[round]) {
+                        rounds[round] = [];
+                    }
+                    rounds[round].push(result);
+                });
 
-                    for (const round in rounds) {
-                        const roundContainer = document.createElement('div');
+                for (const round in rounds) {
+                    let roundContainer = document.querySelector(`.round-container[data-round="${round}"]`);
+                    if (!roundContainer) {
+                        roundContainer = document.createElement('div');
                         roundContainer.className = 'round-container';
+                        roundContainer.setAttribute('data-round', round);
 
                         const roundTitle = document.createElement('div');
                         roundTitle.className = 'round-title';
@@ -170,42 +224,71 @@
 
                         const playerCards = document.createElement('div');
                         playerCards.className = 'player-cards';
-
-                        rounds[round].forEach(player => {
-                            fetch(`/api/player-details?league_id=${leagueId}&player=${player.player_id}`)
-                                .then(response => response.json())
-                                .then(playerData => {
-                                    const playerInfo = playerData.details[0];
-                                    const playerCard = document.createElement('div');
-                                    playerCard.className = 'player-card';
-                                    playerCard.innerHTML = `
-                                        <img src="${playerInfo.image_url}" alt="${playerInfo.name.full}">
-                                        <div class="player-info">
-                                            <div class="player-name">${playerInfo.name.full} (${playerInfo.display_position})</div>
-                                            <div>Team: ${playerInfo.editorial_team_full_name}</div>
-                                            <div>Pick: ${player.pick}.${player.round}</div>
-                                            <div>Position: ${playerInfo.display_position}</div>
-                                        </div>
-                                    `;
-                                    playerCards.appendChild(playerCard);
-                                })
-                                .catch(error => console.error('Error fetching player details:', error));
-                        });
-
                         roundContainer.appendChild(playerCards);
+
                         draftBoard.appendChild(roundContainer);
                     }
-                })
-                .catch(error => console.error('Error fetching draft results:', error));
+
+                    const playerCards = roundContainer.querySelector('.player-cards');
+
+                    let pickCount = 1; // Initialize pick count for the round
+
+                    for (const player of rounds[round]) {
+                        if (!displayedPlayers.has(player.player_id)) {
+                            const playerInfo = await fetchPlayerDetails(leagueId, player);
+                            if (playerInfo) {
+                                const playerCard = document.createElement('div');
+                                playerCard.className = `player-card ${playerInfo.display_position}`;
+                                playerCard.innerHTML = `
+                                    <div class="card-header">
+                                        <span>${playerInfo.display_position}</span>
+                                        <span>${round}.${pickCount}</span>
+                                        <span>${playerInfo.editorial_team_abbr}</span>
+                                    </div>
+                                    <img src="${playerInfo.image_url}" alt="${playerInfo.name.full}">
+                                    <div class="player-info">
+                                        <div class="player-name">${playerInfo.name.full}</div>
+                                    </div>
+                                `;
+                                playerCards.appendChild(playerCard);
+                                displayedPlayers.add(player.player_id);
+                                pickCount++; // Increment pick count for the next player
+                            }
+                            // Introduce a delay to avoid rate limiting
+                            await new Promise(resolve => setTimeout(resolve, 5000)); // Increased delay to 5 seconds
+                        }
+                    }
+                }
+
+                // Update the last fetched pick
+                lastFetchedPick = data.length;
+            } catch (error) {
+                console.error('Error fetching draft results:', error);
+            }
         }
 
-        // Other functions remain unchanged
+        async function checkForNewPicks() {
+            const leagueId = document.getElementById('leagueId').value;
+            if (!leagueId) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/drafts/' + leagueId);
+                const data = await response.json();
 
-        document.getElementById('fetchDraftResults').addEventListener('click', fetchDraftResults);
-        document.getElementById('fetchStandings').addEventListener('click', fetchStandings);
-        document.getElementById('fetchTeams').addEventListener('click', fetchTeams);
-        document.getElementById('fetchPlayerDetails').addEventListener('click', fetchPlayerDetails);
-        document.getElementById('fetchFreeAgents').addEventListener('click', fetchFreeAgents);
+                if (data.length > lastFetchedPick) {
+                    // New picks have been made, update the draft board
+                    await fetchDraftResults();
+                }
+            } catch (error) {
+                console.error('Error checking for new picks:', error);
+            }
+        }
+
+        document.getElementById('fetchDraftResults').addEventListener('click', async () => {
+            await fetchDraftResults();
+            setInterval(checkForNewPicks, 30000); // Check for new picks every 30 seconds
+        });
     </script>
 </body>
 
