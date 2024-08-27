@@ -2,6 +2,7 @@ import logging
 from flask import Flask, jsonify, request, render_template
 from yahoo_oauth import OAuth2
 from yahoo_fantasy_api import Game, League
+import pandas as pd  # Add this import at the top
 
 app = Flask(__name__)
 
@@ -44,55 +45,94 @@ def get_draft_results_by_key(league_key):
         # Create a dictionary for quick lookup of player details by player_id
         player_details_dict = {player['player_id']: player for player in player_details}
 
-        # Combine draft results with player details
-        for result in draft_results:
-            player_id = result['player_id']
-            if player_id in player_details_dict:
-                player_info = player_details_dict[player_id]
-                result['player_name'] = player_info['name']['full']
-                result['image_url'] = player_info.get('image_url', '')
-                result['display_position'] = player_info.get('display_position', '')
-                result['editorial_team_abbr'] = player_info.get('editorial_team_abbr', '')
+        # Create a DataFrame from draft results
+        df_draft_results = pd.DataFrame(draft_results)
 
-        return jsonify(draft_results)
+        # Add player attributes to the DataFrame
+        df_draft_results['player_name'] = df_draft_results['player_id'].map(lambda pid: player_details_dict.get(pid, {}).get('name', {}).get('full', ''))
+        df_draft_results['position_type'] = df_draft_results['player_id'].map(lambda pid: player_details_dict.get(pid, {}).get('position_type', ''))
+
+        # Convert DataFrame to JSON for response
+        return jsonify(df_draft_results.to_dict(orient='records'))
     except Exception as e:
         logging.error(f"Exception: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/player-details', methods=['GET'])
 def get_player_details():
-    """Get player details."""
+    """Fetch player details by league ID and player IDs or names."""
     try:
         league_id = request.args.get('league_id')
-        player_identifier = request.args.get('player')  # Either player ID or search term
+        player_identifiers = request.args.get('player')  # Comma-separated player IDs or search terms
 
-        if not player_identifier:
-            raise ValueError("Player identifier is required")
+        if not league_id or not player_identifiers:
+            return jsonify({'error': 'Missing league_id or player identifiers'}), 400
 
         nfl_game = Game(oauth, 'nfl')
         league = nfl_game.to_league(league_id)
 
-        if player_identifier.isdigit():
-            # If the player identifier is a digit, assume it's a player ID
-            player_details = league.player_details(int(player_identifier))
-        else:
-            # Otherwise, search by name
-            player_details = league.player_details(player_identifier)
+        player_identifiers = player_identifiers.split(',')
+        player_details = []
+
+        for player_identifier in player_identifiers:
+            if player_identifier.isdigit():
+                # If the player identifier is a digit, assume it's a player ID
+                player_details.extend(league.player_details([int(player_identifier)]))
+            else:
+                # Otherwise, search by name
+                player_details.extend(league.player_details(player_identifier))
+
+        if not player_details:
+            return jsonify({'message': 'Players not found'}), 404
 
         # Format response to match your desired structure
         formatted_details = []
+        ownership = {}
         for player in player_details:
+            player_id = player["player_id"]
             formatted_details.append({
-                "player_id": player["player_id"],
-                "name": player["name"],
-                "editorial_team_abbr": player["editorial_team_abbr"],
-                "display_position": player["display_position"],
-                "image_url": player.get("image_url", "")
+                "player_key": player["player_key"],
+                "player_id": player_id,
+                "name": {
+                    "full": player["name"]["full"],
+                    "first": player["name"].get("first", ""),
+                    "last": player["name"].get("last", ""),
+                    "ascii_first": player["name"].get("ascii_first", ""),
+                    "ascii_last": player["name"].get("ascii_last", "")
+                },
+                "editorial_player_key": player.get("editorial_player_key", ""),
+                "editorial_team_key": player.get("editorial_team_key", ""),
+                "editorial_team_full_name": player.get("editorial_team_full_name", ""),
+                "editorial_team_abbr": player.get("editorial_team_abbr", ""),
+                "bye_weeks": player.get("bye_weeks", {}),
+                "uniform_number": player.get("uniform_number", ""),
+                "display_position": player.get("display_position", ""),
+                "headshot": {
+                    "url": player.get("headshot", {}).get("url", ""),
+                    "size": player.get("headshot", {}).get("size", "")
+                },
+                "image_url": player.get("image_url", ""),
+                "is_undroppable": player.get("is_undroppable", ""),
+                "position_type": player.get("position_type", ""),
+                "primary_position": player.get("primary_position", ""),
+                "eligible_positions": player.get("eligible_positions", []),
+                "player_stats": player.get("player_stats", {}),
+                "player_points": player.get("player_points", {})
             })
 
-        return jsonify({"details": formatted_details})
+            # Add ownership information if available
+            if player_id in ownership:
+                ownership[player_id] = {
+                    "ownership_type": ownership[player_id].get("ownership_type", ""),
+                    "owner_team_name": ownership[player_id].get("owner_team_name", "")
+                }
+
+        return jsonify({
+            "details": formatted_details,
+            "ownership": ownership
+        })
     except Exception as e:
-        logging.error(f"Exception: {str(e)}")
+        logging.error(f"Exception while fetching player details: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
