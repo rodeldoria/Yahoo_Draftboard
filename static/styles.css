@@ -2,61 +2,102 @@ body {
     font-family: Arial, sans-serif;
     background-color: #f4f4f4;
     margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    padding: 20px;
+}
+
+.container {
+    max-width: 800px;
+    margin: auto;
+    background: white;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 h1 {
-    margin-top: 20px;
+    text-align: center;
 }
 
-input[type="text"] {
-    padding: 10px;
-    margin: 10px;
-    border: 1px solid #ddd;
-    border-radius: 5px;
+label {
+    display: block;
+    margin-bottom: 10px;
 }
 
+input,
 button {
-    padding: 10px 20px;
-    margin: 10px;
-    border: none;
-    border-radius: 5px;
-    background-color: #007bff;
-    color: white;
-    cursor: pointer;
-}
-
-button:hover {
-    background-color: #0056b3;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 20px;
 }
 
 .draft-board {
     display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
+    flex-direction: column; /* Stack rounds vertically */
     margin-top: 20px;
 }
 
-.player-card {
-    background-color: #fff;
-    border: 1px solid #ddd;
-    border-radius: 5px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    margin: 10px;
-    padding: 10px;
-    text-align: center;
-    width: 150px;
+.round-row {
+    display: flex; /* Align picks horizontally */
+    margin-bottom: 20px; /* Space between rounds */
 }
+
+.player-card {
+    background-color: #f0f0f0; /* Default background */
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    margin: 10px;
+    width: 150px;
+    text-align: center;
+    position: relative;
+    transition: transform 0.2s;
+    flex: 0 0 auto; /* Prevent flex items from shrinking */
+}
+
+.player-stats {
+    display: none; /* Hide stats by default */
+    position: absolute;
+    top: -100px; /* Position above the card */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(255, 255, 255, 0.9);
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    z-index: 10;
+    width: 200px; /* Width of the stats box */
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.player-card:hover .player-stats {
+    display: block; /* Show stats on hover */
+}
+
+/* Unique colors for position groups */
+.player-card[position="QB"] { background-color: #FFA500; } /* QB - Orange */
+.player-card[position="RB"] { background-color: #0000FF; } /* RB - Blue */
+.player-card[position="WR"] { background-color: #ADD8E6; } /* WR - Light Blue */
+.player-card[position="TE"] { background-color: #FFD700; } /* TE - Gold */
+.player-card[position="DEF"] { background-color: #D3D3D3; } /* DEF - Light Grey */
+.player-card[position="K"] { background-color: #FFA07A; } /* K - Light Salmon */
+/* Add more position groups as needed */
 
 .player-card img {
-    border-radius: 50%;
-    height: 50px;
-    width: 50px;
+    width: 100%; /* Ensures the image takes the full width of the card */
+    height: auto; /* Maintains aspect ratio */
+    border-radius: 5px; /* Rounded corners */
+    margin-bottom: 10px; /* Space below the image */
 }
 
-.player-card p {
-    margin: 5px 0;
+.player-card:hover {
+    transform: scale(1.05);
+    cursor: pointer;
+}
+
+.player-name {
+    font-weight: bold;
+}
+
+.player-position {
+    color: #555;
 }

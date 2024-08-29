@@ -185,6 +185,63 @@
       .draft-results-table tr:nth-child(even) {
         background-color: #f2f2f2;
       }
+
+      /* Add styles from draft_tiers.html */
+      .tier-list {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(2, auto);
+        gap: 20px;
+        margin: 20px;
+      }
+
+      .position-group {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .highlight-light-green {
+        background-color: lightgreen;
+      }
+
+      .highlight-light-gold {
+        background-color: gold;
+      }
+
+      .highlight-light-red {
+        background-color: lightcoral;
+      }
+
+      .highlight-light-purple {
+        background-color: plum;
+      }
+
+      .tier-list span.material-symbols-outlined {
+        cursor: pointer;
+        margin: 0 2px;
+        font-size: 18px;
+      }
+
+      .tier-list span.material-symbols-outlined:hover {
+        opacity: 0.7;
+      }
+
+      .loader {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #3498db;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        animation: spin 1s linear infinite;
+        display: none;
+        margin: 10px auto;
+      }
+
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
     </style>
   </head>
 
@@ -246,6 +303,9 @@
       <tbody id="draftResultsBody"></tbody>
     </table>
 
+    <!-- Include draft_tiers content -->
+    {% include 'draft_tiers_content.html' %}
+
     <script>
       let lastFetchedPick = 0;
       const displayedPlayers = new Set();
@@ -280,6 +340,9 @@
         }
         try {
           const response = await fetch("/api/drafts/" + leagueId);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
           const data = await response.json();
           const draftBoard = document.getElementById("draftBoard");
           const draftResultsBody = document.getElementById("draftResultsBody");
@@ -354,6 +417,9 @@
                   <td>${playerInfo.editorial_team_abbr}</td>
                 `;
                 draftResultsBody.appendChild(row);
+
+                // Hide the drafted player in the tier list
+                hideDraftedPlayer(playerInfo.name.full);
               }
             }
           }
@@ -365,6 +431,7 @@
           lastFetchedPick = data.length;
         } catch (error) {
           console.error("Error fetching draft results:", error);
+          alert("Failed to fetch draft results. Please check your League ID and try again.");
         }
       }
 
@@ -421,6 +488,220 @@
           await fetchDraftResults();
           setInterval(checkForNewPicks, 30000); // Check for new picks every 30 seconds
         });
+
+      // Add JavaScript from draft_tiers.html
+      document.getElementById('uploadForm').addEventListener('submit', function (event) {
+        event.preventDefault();
+        const formData = new FormData(this);
+        const loader = document.getElementById('loader');
+        
+        // Show the loader
+        loader.style.display = 'block';
+
+        fetch('/upload', {
+          method: 'POST',
+          body: formData
+        })
+          .then(response => response.json())
+          .then(data => {
+            console.log('Uploaded data:', data);
+            displayTierList(data);
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while uploading the file.');
+          })
+          .finally(() => {
+            // Hide the loader
+            loader.style.display = 'none';
+          });
+      });
+
+      function displayTierList(data) {
+        const tierListDiv = document.getElementById('tier-list');
+        tierListDiv.innerHTML = ''; // Clear existing data
+
+        const positions = ["QB", "RB", "WR", "TE", "DEF", "K"];
+        positions.forEach(position => {
+            if (data[position] && data[position].length > 0) {
+                const positionGroup = document.createElement('div');
+                positionGroup.className = 'position-group';
+                positionGroup.innerHTML = `<h2>${position}</h2>`;
+
+                const table = document.createElement('table');
+                table.style.borderCollapse = 'collapse';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>ADP</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                `;
+
+                data[position].forEach(player => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${player.Rank || ''}</td>
+                        <td class="player-name">${player.Name || ''}</td>
+                        <td>${player.Team || ''}</td>
+                        <td>${player.ADP || ''}</td>
+                        <td>
+                            <span class="material-symbols-outlined action-icon" data-action="check">check_circle</span>
+                            <span class="material-symbols-outlined action-icon" data-action="star">star</span>
+                            <span class="material-symbols-outlined action-icon" data-action="close">close</span>
+                            <span class="material-symbols-outlined action-icon" data-action="lock">lock</span>
+                        </td>
+                    `;
+                    table.querySelector('tbody').appendChild(row);
+                });
+
+                positionGroup.appendChild(table);
+                tierListDiv.appendChild(positionGroup);
+            }
+        });
+
+        // Add event listeners to action icons
+        document.querySelectorAll('.action-icon').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const action = this.getAttribute('data-action');
+                const row = this.closest('tr');
+                handleAction(row, action);
+            });
+        });
+      }
+
+      function handleAction(row, action) {
+        row.classList.remove('highlight-light-green', 'highlight-light-gold', 'highlight-light-red', 'highlight-light-purple');
+        
+        switch(action) {
+            case 'check':
+                row.style.display = 'none';
+                break;
+            case 'star':
+                row.classList.add('highlight-light-gold');
+                break;
+            case 'close':
+                row.classList.add('highlight-light-red');
+                break;
+            case 'lock':
+                row.classList.add('highlight-light-purple');
+                break;
+        }
+      }
+
+      function hideDraftedPlayer(playerName) {
+        const tierListDiv = document.getElementById('tier-list');
+        const playerRows = tierListDiv.querySelectorAll('tr');
+        
+        playerRows.forEach(row => {
+            const nameCell = row.querySelector('.player-name');
+            if (nameCell && nameCell.textContent.trim() === playerName) {
+                row.style.display = 'none';
+            }
+        });
+      }
+
+      // Add this to your script section, after the displayTierList function
+
+      function highlightCell(icon, color) {
+        const row = icon.closest('tr');
+        row.classList.remove('highlight-light-green', 'highlight-light-gold', 'highlight-light-red', 'highlight-light-purple');
+        
+        switch(color) {
+            case 'light-green':
+                row.style.display = 'none';
+                break;
+            case 'light-gold':
+                row.classList.add('highlight-light-gold');
+                break;
+            case 'light-red':
+                row.classList.add('highlight-light-red');
+                break;
+            case 'light-purple':
+                row.classList.add('highlight-light-purple');
+                break;
+        }
+      }
+
+      // Modify the displayTierList function to use data-action attributes
+      function displayTierList(data) {
+        const tierListDiv = document.getElementById('tier-list');
+        tierListDiv.innerHTML = ''; // Clear existing data
+
+        const positions = ["QB", "RB", "WR", "TE", "DEF", "K"];
+        positions.forEach(position => {
+            if (data[position] && data[position].length > 0) {
+                const positionGroup = document.createElement('div');
+                positionGroup.className = 'position-group';
+                positionGroup.innerHTML = `<h2>${position}</h2>`;
+
+                const table = document.createElement('table');
+                table.style.borderCollapse = 'collapse';
+                table.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Name</th>
+                            <th>Team</th>
+                            <th>ADP</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                `;
+
+                data[position].forEach(player => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${player.Rank || ''}</td>
+                        <td class="player-name">${player.Name || ''}</td>
+                        <td>${player.Team || ''}</td>
+                        <td>${player.ADP || ''}</td>
+                        <td>
+                            <span class="material-symbols-outlined action-icon" data-action="check">check_circle</span>
+                            <span class="material-symbols-outlined action-icon" data-action="star">star</span>
+                            <span class="material-symbols-outlined action-icon" data-action="close">close</span>
+                            <span class="material-symbols-outlined action-icon" data-action="lock">lock</span>
+                        </td>
+                    `;
+                    table.querySelector('tbody').appendChild(row);
+                });
+
+                positionGroup.appendChild(table);
+                tierListDiv.appendChild(positionGroup);
+            }
+        });
+
+        // Add event listeners to action icons
+        document.querySelectorAll('.action-icon').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const action = this.getAttribute('data-action');
+                let color;
+                switch(action) {
+                    case 'check':
+                        color = 'light-green';
+                        break;
+                    case 'star':
+                        color = 'light-gold';
+                        break;
+                    case 'close':
+                        color = 'light-red';
+                        break;
+                    case 'lock':
+                        color = 'light-purple';
+                        break;
+                }
+                highlightCell(this, color);
+            });
+        });
+      }
     </script>
   </body>
 </html>

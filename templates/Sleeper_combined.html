@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <div id="tiersContainer">
+        <div class="loader" id="tiersLoader"></div> <!-- Loading spinner for tiers -->
+        <div id="tiersContent" style="display: none;">
+            {% include 'draft_tiers.html' %}
+        </div>
+    </div>
+{% endblock %}
